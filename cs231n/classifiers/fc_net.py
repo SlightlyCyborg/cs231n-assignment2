@@ -190,6 +190,12 @@ class FullyConnectedNet(object):
     #Classifier Weights
     self.params['W' + str(len(hidden_dims) + 1)] = np.random.normal(0, weight_scale, (past_dim, num_classes))
     self.params['b' + str(len(hidden_dims) + 1)] = np.zeros((1, num_classes))
+
+    #Batch Norm betas & gammas
+    if(use_batchnorm):
+      for i, dim in enumerate(hidden_dims):
+        self.params['bn_beta' + str(i+1)] = np.zeros((1,dim))
+        self.params['bn_gamma' + str(i+1)] = np.ones((1,dim))
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -248,12 +254,21 @@ class FullyConnectedNet(object):
     # layer, etc.                                                              #
     ############################################################################
     affines, affine_caches, relus, relu_caches = [], [], [], []
+    if(self.use_batchnorm):
+      batchnorms = []
+      batchnorm_caches = []
     next_input = X
     for i in range(self.num_layers-1):
       temp_affine, temp_affine_cache = affine_forward(next_input, self.params['W' + str(i+1)], self.params['b' + str(i+1)])
       affines.append(temp_affine)
       affine_caches.append(temp_affine_cache)
-      temp_relu, temp_relu_cache  = relu_forward(temp_affine)
+      if(self.use_batchnorm):
+        temp_batchnorm, temp_batchnorm_cache = batchnorm_forward(temp_affine, self.params['bn_gamma' + str(i+1)], self.params['bn_beta' + str(i+1)], self.bn_params[i])
+        batchnorm_caches.append(temp_batchnorm_cache)
+        batchnorms.append(temp_batchnorm)
+        temp_relu, temp_relu_cache  = relu_forward(temp_batchnorm)
+      else:
+        temp_relu, temp_relu_cache  = relu_forward(temp_affine)
       relus.append(temp_relu)
       relu_caches.append(temp_relu_cache)
       next_input = temp_relu
@@ -291,10 +306,17 @@ class FullyConnectedNet(object):
     #Hidden grads
     dx = d_softmax_input
     for h in range(self.num_layers - 1)[::-1]:
-      daffine = relu_backward(dx, relu_caches[h])
+      if (self.use_batchnorm):
+        dbatchnorm = relu_backward(dx, relu_caches[h])
+        daffine, dgamma, dbeta = batchnorm_backward(dbatchnorm, batchnorm_caches[h])
+      else:  
+        daffine = relu_backward(dx, relu_caches[h])
       dx, dw, db = affine_backward(daffine, affine_caches[h])
       grads['W' +  str(h + 1)] = dw + self.reg * self.params['W' + str(h + 1)]
       grads['b' + str(h + 1)] = db
+      if (self.use_batchnorm):
+        grads['bn_gamma' + str(h + 1)] = dgamma
+        grads['bn_beta' + str(h + 1)] = dbeta
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################

@@ -170,19 +170,39 @@ def batchnorm_forward(x, gamma, beta, bn_param):
     # the momentum variable to update the running mean and running variance,    #
     # storing your result in the running_mean and running_var variables.        #
     #############################################################################
-    sample_mean = np.sum(x, axis=0)/len(x)
-    sample_var  = np.sum((x - sample_mean)**2, axis=0)/len(x)
+    #Mean
+    meanfn = lambda x: np.sum(x, axis=0)/len(x)
+    sample_mean = meanfn(x)
+
+    #Varience
+    varfn = lambda x, mean: np.sum((x - mean)**2, axis=0)/len(x)
+    sample_var  = varfn(x, sample_mean)
+
     running_mean = momentum * running_mean + (1 - momentum) * sample_mean
     running_var = momentum * running_var + (1 - momentum) * sample_var
+
+
     a    = (x - sample_mean)
-    b    = np.sqrt(sample_var + eps)
+
+    bfn  = lambda var: np.sqrt(var + eps)
+    b    = bfn(sample_var) 
     xhat = a/b
     out  = gamma * xhat + beta
 
-    #Cache
+    #Cache the fns for individual grad check
+    cache['meanfn'] = meanfn
+    cache['varfn']  = varfn
+    cache['bfn']    = bfn
+
+    cache['gamma'] = gamma
+    cache['beta'] = beta
     cache['xhat'] = xhat
     cache['a'] = a
     cache['b'] = b
+    cache['mean'] = sample_mean
+    cache['var'] = sample_var
+    cache['eps'] = eps
+    cache['x'] = x
     #############################################################################
     #                             END OF YOUR CODE                              #
     #############################################################################
@@ -238,13 +258,44 @@ def batchnorm_backward(dout, cache):
   # TODO: Implement the backward pass for batch normalization. Store the      #
   # results in the dx, dgamma, and dbeta variables.                           #
   #############################################################################
+  for key, val in cache.iteritems():
+    try:
+      #print "{}.shape:{}".format(key, val.shape)
+      pass
+    except:
+      #print "{}.shape:{}".format(key, 1)
+      pass
+
+
   xhat = cache['xhat']
-  dgamma = xhat * dout
-  dbeta  = dout
-  dxhat  = cache['gamma'] * dout
-  da     = 1/cache['b'] * dxhat
-  db     = -cache['a']*cache['b']**(-2) * dxhat
-  dvar   = 1/2 * ((cache['var'] + cache['eps'])**(- * 1 / 2)) * db
+  dgamma = np.sum(xhat * dout, axis = 0)
+  dbeta  = np.sum(dout, axis = 0)
+  dxhat  = dout * cache['gamma']
+  da = 1/cache['b'] * dxhat
+  #Guess summed
+  db = np.sum(-1 * cache['a']/(cache['b']**2) * dxhat, axis=0)
+  #print "db.shape:{}".format(db.shape)
+  #dvar = 0.5 * ((cache['var'] + cache['eps']) ** (-1/2)) * db
+  dvar = 0.5 * (1/np.sqrt(cache['var'] + cache['eps'])) * db
+  #print 'var.shape', cache['var'].shape
+  #print 'var: ', cache['var']
+  #print 'eps: ', cache['eps']
+  #print 'nonexponent', (1/np.sqrt(cache['var'] + cache['eps']))
+  #print 'exponent: ', ((cache['var'] + cache['eps']) ** (-1/2))
+  #print "dvar.shape:{}".format(dvar.shape)
+  #Solution found after stack overflow post
+  #integer division
+  #http://stackoverflow.com/questions/40856681/why-are-numpy-fractional-exponents-not-working
+  dmean = np.sum(-1 * da, axis=0)
+  dmean = dmean + np.sum((-2 * cache['x'] + 2 * cache['mean']) / len(cache['x']), axis=0) * dvar
+  #print "dmean.shape:{}".format(dmean.shape)
+  dx = 1.0/len(cache['x']) * dmean
+  dx = dx + da
+  dx = dx + (2 * cache['x'] -2 * cache['mean']) / len(cache['x']) * dvar
+  #print 'dx.shape: ', dx.shape
+  
+
+  
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
