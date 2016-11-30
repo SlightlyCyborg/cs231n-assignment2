@@ -432,12 +432,48 @@ def conv_forward_naive(x, w, b, conv_param):
     W' = 1 + (W + 2 * pad - WW) / stride
   - cache: (x, w, b, conv_param)
   """
-  out = None
+  p = conv_param['pad']
+  s = conv_param['stride']
+  N = x.shape[0]
+  C = x.shape[1]
+  H = x.shape[2]
+  W = x.shape[3]
+  F = w.shape[0]
+  HH = w.shape[2]
+  WW = w.shape[3]
+  Wprime = 1 + (W + 2 * p - WW) / s
+  Hprime = 1 + (H + 2 * p - HH) / s
+
+  out = np.zeros((N,F,Hprime, Wprime))
   #############################################################################
   # TODO: Implement the convolutional forward pass.                           #
   # Hint: you can use the function np.pad for padding.                        #
   #############################################################################
-  pass
+  padded_x = np.pad(x, ((0,0),(0,0),(p,p),(p,p)), 'constant')
+
+  #print padded_x
+  for n in xrange(N):
+    for f in xrange(F):
+      #print "\nNew Filter: {}".format(f)
+      ###### The convolving loops #######
+      for x_prime in xrange(Wprime):
+          for y_prime in xrange(Hprime):
+            x_start = x_prime * s
+            y_start = y_prime * s
+
+            #######The dot product loops########
+            #print("\nNew dot product")
+            #print "x_prime, y_prime: {},{}".format(x_prime, y_prime)
+            sum = 0
+            for x_val in xrange(0, WW):
+              for y_val in xrange(0,HH):
+                input_x = x_start + x_val
+                input_y = y_start + y_val
+                for c in xrange(C):
+                  sum += padded_x[n,c,input_y,input_x]*w[f,c,y_val,x_val]
+                  #print "x,y,c,sum: {},{},{},{}".format(input_x, input_y, c, sum)
+            out[n,f,y_prime,x_prime] = sum + b[f]
+  
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
